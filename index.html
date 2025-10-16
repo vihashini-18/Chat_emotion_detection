@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Emotion Heatmap Chat</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Live Group Chat Emotion Heatmap</h1>
+
+        <div class="chat-area">
+            <div id="chat-messages" class="chat-messages">
+                <!-- Chat messages will be appended here -->
+            </div>
+            <div id="heatmap-grid" class="heatmap-grid">
+                <!-- Heatmap cells will be rendered here -->
+            </div>
+        </div>
+
+        <div class="message-input">
+            <input type="text" id="username-input" placeholder="Your Name" value="User">
+            <input type="text" id="message-input" placeholder="Type your message..." autofocus>
+            <button id="send-button">Send</button>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
