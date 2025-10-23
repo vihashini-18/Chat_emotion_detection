@@ -8,18 +8,36 @@ import random
 import os
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your_secret_key_change_me_in_production') # Use environment variable or default
-socketio = SocketIO(app, cors_allowed_origins="*") # Allow all origins for development
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your_secret_key_change_me_in_production')  # Use environment variable or default
+socketio = SocketIO(app, cors_allowed_origins="*")  # Allow all origins for development
 
 emotion_analyzer = None
-try:
-    print("Attempting to load emotion model (j-hartmann/emotion-english-distilroberta-base)...")
-    emotion_analyzer = pipeline("text-classification", model="j-hartmann/emotion-english-distilroberta-base")
-    print("Emotion model loaded successfully.")
-except Exception as e:
-    print(f"Could not load emotion model: {e}")
-    print("Falling back to a mock emotion analyzer for demonstration.")
-    emotion_analyzer = None # Explicitly set to None if loading fails
+LOADED_MODEL_ID = None
+
+# Prefer robust, widely used models. Try primary then fallback.
+_MODEL_CANDIDATES = [
+    "j-hartmann/emotion-english-distilroberta-base",          # 7-class emotions
+    "bhadresh-savani/distilbert-base-uncased-emotion",        # 6-class emotions (love -> joy)
+]
+
+for candidate in _MODEL_CANDIDATES:
+    try:
+        print(f"Attempting to load emotion model: {candidate} ...")
+        # Force CPU unless GPU is explicitly configured in the environment
+        emotion_analyzer = pipeline(
+            task="text-classification",
+            model=candidate,
+            device=-1,
+        )
+        LOADED_MODEL_ID = candidate
+        print(f"Emotion model loaded successfully: {candidate}")
+        break
+    except Exception as e:
+        print(f"Could not load model '{candidate}': {e}")
+        emotion_analyzer = None
+
+if not emotion_analyzer:
+    print("No emotion model could be loaded. Falling back to mock analyzer.")
 
 # --- Data Structures ---
 # Store recent messages and their emotions
@@ -39,21 +57,46 @@ emotion_map = {
     'negative': {'color': '#FF6347', 'emoji': '😞', 'word_color': '#CD5C5C'}, # Tomato, IndianRed
 }
 
+# --- Label Normalization and Helper Functions ---
+def _normalize_label(raw_label: str) -> str:
+    label = (raw_label or '').strip().lower()
+    # Unify common variants from different models
+    alias_to_label = {
+        'happy': 'joy',
+        'happiness': 'joy',
+        'love': 'joy',
+        'amusement': 'joy',
+        'excitement': 'joy',
+        'optimism': 'positive',
+        'admiration': 'positive',
+        'approval': 'positive',
+        'gratitude': 'positive',
+        'pride': 'positive',
+        'relief': 'positive',
+        'realization': 'neutral',
+        'curiosity': 'neutral',
+        'confusion': 'neutral',
+        'annoyance': 'anger',
+        'nervousness': 'fear',
+        'disappointment': 'sadness',
+        'grief': 'sadness',
+        'shock': 'surprise',
+    }
+
+    if label in emotion_map:
+        return label
+    if label in alias_to_label:
+        return alias_to_label[label]
+    return 'neutral'
+
 # --- Helper Function for Emotion Analysis ---
 def get_emotion(text):
     if emotion_analyzer:
         try:
-            result = emotion_analyzer(text)[0]
-            label = result['label'].lower()
-            score = result['score']
-            # Standardize labels if necessary, e.g., if model returns 'happy' and we use 'joy'
-            if label == 'happy': label = 'joy' # Example mapping
-            if label in emotion_map:
-                return label, score
-            else:
-                # If model gives a label not in our map, try to categorize or default to neutral
-                # This could be more sophisticated
-                return 'neutral', score
+            result = emotion_analyzer(text, truncation=True)[0]
+            label = _normalize_label(result['label'])
+            score = float(result.get('score', 0.0))
+            return label, score
         except Exception as e:
             print(f"Error during LLM emotion analysis: {e}. Falling back to mock.")
             # If LLM analysis fails for a specific input, use mock
