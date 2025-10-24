@@ -149,13 +149,15 @@ def simulate_messages_thread():
 
 
 if __name__ == '__main__':
-    # Start the message simulation in a separate thread only if the real model failed to load
+    port = int(os.environ.get("PORT", 7860))  # Hugging Face uses 7860
+    host = "0.0.0.0"
+
     if not emotion_analyzer:
         print("Emotion model not loaded. Starting message simulation.")
         thread = threading.Thread(target=simulate_messages_thread)
-        thread.daemon = True # Allows the main program to exit even if this thread is still running
+        thread.daemon = True
         thread.start()
     else:
         print("Emotion model loaded successfully. Simulation will not run.")
 
-    socketio.run(app, debug=True, allow_unsafe_werkzeug=True)
+    socketio.run(app, host=host, port=port, debug=False))
